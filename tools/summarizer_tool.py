@@ -1,6 +1,6 @@
 from langchain_openai import OpenAI
 from langchain.tools import tool
-from tools.llm import llm
+from llm import llm
 
 
 def summarize(input: str) -> str:
