@@ -1,5 +1,5 @@
 class TraceBuffer:
-    def __init__(self, on_full_callback, chunk_threshold: int = 5):
+    def __init__(self, on_full_callback, chunk_threshold: int):
         self.buffer = []
         self.on_full_callback = on_full_callback
         self.chunk_threshold = chunk_threshold

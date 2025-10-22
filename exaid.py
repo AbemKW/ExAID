@@ -1,6 +1,7 @@
 from summary_state import SummaryState
 from buffer import TraceBuffer
 from summarizer_agent import summarize
+
 class EXAID:
     def __init__(self,chunk_threshold: int = 5):
         self.name = "EXAID"
@@ -11,6 +12,7 @@ class EXAID:
     def addAgent(self, agent, id: str):
         self.agents[id] = agent
         self.graph.add_agent(id)
+        
     async def addTrace(self, id: str, text: str):
         self.buffer.addchunk((id, text))
 
