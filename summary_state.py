@@ -26,21 +26,21 @@ class SummaryState():
             }
     def add_trace(self, agent_id: str, trace: str):
         trace_node ={
-            "trace_id" : str(uuid.uuid4()),
+            "trace_id" : f"{uuid.uuid4()}|{agent_id}",
             "text": trace,
             "timestamp": datetime.now(datetime.timezone.utc)
         }
         self.state[agent_id]["traces"].append(trace_node)
     def add_summary(self, agent_id: str, summary: str):
         summary_node= {
-            "summar_id": str(uuid.uuid4()),
+            "summary_id": f"{uuid.uuid4()}|{agent_id}",
             "text": summary,
             "timestamp": datetime.now(datetime.timezone.utc)
         }
         self.state[agent_id]["summaries"].append(summary_node)
     def add_feedback(self, agent_id: str, feedback: str):
         feedback_node = {
-            "feedback_id": str(uuid.uuid4()),
+            "feedback_id": f"{uuid.uuid4()}|{agent_id}",
             "text": feedback,
             "timestamp": datetime.now(datetime.timezone.utc)
         }
