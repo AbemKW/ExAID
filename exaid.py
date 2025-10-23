@@ -20,5 +20,14 @@ class EXAID:
         # store trace and produce summary for the given agent
         self.graph.add_trace(agent_id, combined_text)
         # summarizer is synchronous in this project; call directly
-        summary = summarize(combined_text)
+        summary = summarize(agent_id, combined_text)
         self.graph.add_summary(agent_id, summary)
+
+    async def getsummary(self, agent_id: str) -> str:
+        summaries = self.graph.state[agent_id]["summaries"]
+        if summaries:
+            return summaries[-1]["text"]
+        return ""
+    
+    async def getfullsummary(self, agent_id: str) -> list[dict]:
+        return self.graph.state[agent_id]["summaries"]
