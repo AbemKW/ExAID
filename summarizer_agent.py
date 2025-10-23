@@ -4,7 +4,7 @@ from llm import llm
 from summary_state import SummaryState as State
 
 
-summarize_prompt = ChatPromptTemplate.from_template([
+summarize_prompt = ChatPromptTemplate.from_messages([
     ("system", "{input} \n\nSummarize this text using layered approach. "
     "First, identify three key points which are facts, implications, and results."
     "Then condense them into a concise summary. "

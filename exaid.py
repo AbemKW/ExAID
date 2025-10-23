@@ -16,7 +16,7 @@ class EXAID:
         # pass agent id and text separately to the buffer
         self.buffer.addchunk(id, text)
 
-    async def _on_buffer_full(self, agent_id: str, combined_text: str):
+    def _on_buffer_full(self, agent_id: str, combined_text: str):
         # store trace and produce summary for the given agent
         self.graph.add_trace(agent_id, combined_text)
         # summarizer is synchronous in this project; call directly

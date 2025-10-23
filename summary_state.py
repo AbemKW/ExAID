@@ -1,7 +1,6 @@
 from typing import Annotated, TypedDict
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
-from langgraph.graph.message import add_messages
 
 class SummaryState():
     """
@@ -11,11 +10,7 @@ class SummaryState():
 
     def __init__(self):
         # Each key is agent_id; values are dicts of that agent's nodes
-        self.state = TypedDict(lambda: {
-            "traces": [],
-            "summaries": [],
-            "feedback": []
-        })
+        self.state = {}
 
     def add_agent(self, agent_id: str):
         if agent_id not in self.state:
@@ -28,20 +23,20 @@ class SummaryState():
         trace_node ={
             "trace_id" : f"{uuid.uuid4()}|{agent_id}",
             "text": trace,
-            "timestamp": datetime.now(datetime.timezone.utc)
+            "timestamp": datetime.now(timezone.utc)
         }
         self.state[agent_id]["traces"].append(trace_node)
     def add_summary(self, agent_id: str, summary: str):
         summary_node= {
             "summary_id": f"{uuid.uuid4()}|{agent_id}",
             "text": summary,
-            "timestamp": datetime.now(datetime.timezone.utc)
+            "timestamp": datetime.now(timezone.utc)
         }
         self.state[agent_id]["summaries"].append(summary_node)
     def add_feedback(self, agent_id: str, feedback: str):
         feedback_node = {
             "feedback_id": f"{uuid.uuid4()}|{agent_id}",
             "text": feedback,
-            "timestamp": datetime.now(datetime.timezone.utc)
+            "timestamp": datetime.now(timezone.utc)
         }
         self.state[agent_id]["feedback"].append(feedback_node)
