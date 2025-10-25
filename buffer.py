@@ -25,6 +25,9 @@ class TraceBuffer:
             # callback expected to accept (agent_id, combined_text)
             try:
                 self.on_full_callback(agent_id, combined)
+            except Exception as e:
+                # Log the error and continue; buffer will still be reset
+                print(f"Error in on_full_callback for agent {agent_id}: {e}")
             finally:
                 # reset only this agent's buffer
                 self.buffer[agent_id] = []
