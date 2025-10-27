@@ -11,6 +11,7 @@ class SummaryState():
     def __init__(self):
         # Each key is agent_id; values are dicts of that agent's nodes
         self.state = {}
+        self.summarizer_busy = False
 
     def add_agent(self, agent_id: str):
         if agent_id not in self.state:

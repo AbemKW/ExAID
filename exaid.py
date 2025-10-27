@@ -6,7 +6,7 @@ class EXAID:
     def __init__(self,chunk_threshold: int = 5):
         self.graph = SummaryState()
         self.agents = {}
-        self.buffer = TraceBuffer(self._on_buffer_full,chunk_threshold)
+        self.buffer = TraceBuffer(self._on_buffer_full, chunk_threshold, self.graph)
 
     def addAgent(self, agent, id: str):
         self.agents[id] = agent
@@ -20,8 +20,15 @@ class EXAID:
         # store trace and produce summary for the given agent
         self.graph.add_trace(agent_id, combined_text)
         # summarizer is synchronous in this project; call directly
-        summary = summarize(agent_id, combined_text)
+        summary, self.graph = summarize(agent_id, combined_text, self.graph)
         self.graph.add_summary(agent_id, summary)
+        
+        # Process only one queued item to avoid blocking
+        if not self.buffer.queue.empty():
+            queued_agent_id, queued_text = self.buffer.queue.get()
+            self.graph.add_trace(queued_agent_id, queued_text)
+            summary, self.graph = summarize(queued_agent_id, queued_text, self.graph)
+            self.graph.add_summary(queued_agent_id, summary)
 
     async def getsummary(self, agent_id: str) -> str:
         summaries = self.graph.state[agent_id]["summaries"]
