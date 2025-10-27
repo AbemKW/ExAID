@@ -23,8 +23,8 @@ class EXAID:
         summary, self.graph = summarize(agent_id, combined_text, self.graph)
         self.graph.add_summary(agent_id, summary)
         
-        # Process only one queued item to avoid blocking
-        if not self.buffer.queue.empty():
+        # Process any queued items from any agent
+        while not self.buffer.queue.empty():
             queued_agent_id, queued_text = self.buffer.queue.get()
             self.graph.add_trace(queued_agent_id, queued_text)
             summary, self.graph = summarize(queued_agent_id, queued_text, self.graph)

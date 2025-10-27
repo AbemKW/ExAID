@@ -64,7 +64,8 @@ class TestTraceBuffer(unittest.TestCase):
             self.callback_called = True
             self.callback_args = (agent_id, combined_text)
 
-        self.buffer = TraceBuffer(mock_callback, chunk_threshold=3)
+        self.graph = SummaryState()
+        self.buffer = TraceBuffer(mock_callback, chunk_threshold=3, graph=self.graph)
 
     def test_add_chunk_below_threshold(self):
         agent_id = "agent_1"
@@ -131,7 +132,7 @@ class TestEXAID(unittest.IsolatedAsyncioTestCase):
 
     @patch('exaid.summarize')
     async def test_add_trace_at_threshold(self, mock_summarize):
-        mock_summarize.return_value = "Mocked summary"
+        mock_summarize.return_value = ("Mocked summary", self.exaid.graph)
 
         agent_id = "agent_1"
         self.exaid.addAgent("agent", agent_id)
@@ -140,7 +141,7 @@ class TestEXAID(unittest.IsolatedAsyncioTestCase):
         await self.exaid.addTrace(agent_id, "trace 2")  # Should trigger summarization
 
         # Should have called summarize
-        mock_summarize.assert_called_once_with(agent_id, "trace 1\ntrace 2")
+        mock_summarize.assert_called_once_with(agent_id, "trace 1\ntrace 2", self.exaid.graph)
 
         # Should have added trace and summary
         self.assertEqual(len(self.exaid.graph.state[agent_id]["traces"]), 1)
@@ -156,7 +157,7 @@ class TestEXAID(unittest.IsolatedAsyncioTestCase):
 
     @patch('exaid.summarize')
     async def test_getsummary_with_summaries(self, mock_summarize):
-        mock_summarize.return_value = "Latest summary"
+        mock_summarize.return_value = ("Latest summary", self.exaid.graph)
 
         agent_id = "agent_1"
         self.exaid.addAgent("agent", agent_id)
@@ -170,7 +171,7 @@ class TestEXAID(unittest.IsolatedAsyncioTestCase):
 
     @patch('exaid.summarize')
     async def test_getfullsummary(self, mock_summarize):
-        mock_summarize.return_value = "Summary 1"
+        mock_summarize.return_value = ("Summary 1", self.exaid.graph)
 
         agent_id = "agent_1"
         self.exaid.addAgent("agent", agent_id)
@@ -182,6 +183,48 @@ class TestEXAID(unittest.IsolatedAsyncioTestCase):
         full_summaries = await self.exaid.getfullsummary(agent_id)
         self.assertEqual(len(full_summaries), 1)
         self.assertEqual(full_summaries[0]["text"], "Summary 1")
+
+    @patch('exaid.summarize')
+    async def test_queue_when_busy(self, mock_summarize):
+        mock_summarize.return_value = ("Summary", self.exaid.graph)
+
+        agent_id = "agent_1"
+        self.exaid.addAgent("agent", agent_id)
+
+        # Manually set summarizer as busy
+        self.exaid.graph.summarizer_busy = True
+
+        # Add first batch - should queue since busy
+        await self.exaid.addTrace(agent_id, "trace 1")
+        await self.exaid.addTrace(agent_id, "trace 2")  # This should queue
+
+        # Should not have called summarize yet
+        self.assertEqual(mock_summarize.call_count, 0)
+
+        # Now set not busy and add another batch to trigger processing
+        self.exaid.graph.summarizer_busy = False
+        await self.exaid.addTrace(agent_id, "trace 3")
+        await self.exaid.addTrace(agent_id, "trace 4")  # This should trigger and process queue
+
+        # Should have called summarize twice: once for the new batch, once for the queued batch
+        self.assertEqual(mock_summarize.call_count, 2)
+        # Check calls - first the new batch, then the queued ones
+        calls = mock_summarize.call_args_list
+        self.assertEqual(calls[0][0], (agent_id, "trace 3\ntrace 4", self.exaid.graph))
+        self.assertEqual(calls[1][0], (agent_id, "trace 1\ntrace 2", self.exaid.graph))
+        # The queue processes all, but since it's while not empty, and we added only one more, wait.
+
+        # Actually, when the second batch triggers, it processes "trace 3\ntrace 4", then processes the queue which has "trace 1\ntrace 2", and since queue is now empty, stops.
+
+        # So 2 calls.
+
+        # But in my test, I added two batches while busy, so queue has ("agent_1", "trace 1\ntrace 2")
+
+        # Then when not busy, add "trace 3", "trace 4" -> triggers, processes "trace 3\ntrace 4", then processes queue "trace 1\ntrace 2"
+
+        # Yes, 2 calls.
+
+        self.assertEqual(len(calls), 2)
 
 
 if __name__ == '__main__':

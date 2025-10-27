@@ -85,7 +85,8 @@ The system is organized around a few small modules:
 
 - If you plan to run this end-to-end, update `llm.py` to point at a reachable LLM provider and set credentials via environment variables or a secrets manager. Avoid committing real API keys into the repository.
 
-- Consider adding unit tests for `buffer.py` and `summary_state.py` to lock in expected behaviour for buffering and state updates.
+- Consider adding unit tests for `buffer.py` and `summary_state.py` to 
+lock in expected behaviour for buffering and state updates.
 
 - The `TraceBuffer` class includes comprehensive error handling for input validation and callback exception management.
 
