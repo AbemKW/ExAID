@@ -15,8 +15,11 @@ summarize_prompt = ChatPromptTemplate.from_messages([
 
 summarize_chain = summarize_prompt | llm
 
-def summarize(agent_id: str, text: str) -> str:
+def summarize(agent_id: str, text: str, graph: State) -> str:
     """Summarizes the given text input."""
-    return summarize_chain.invoke({
+    graph.summarizer_busy = True
+    summary = summarize_chain.invoke({
         "input": text, 
         "agent_id": agent_id})
+    graph.summarizer_busy = False
+    return summary, graph

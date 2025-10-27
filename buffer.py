@@ -1,3 +1,6 @@
+from summary_state import SummaryState
+import queue
+
 class TraceBuffer:
     """A tiny buffer that stores chunks per-agent.
 
@@ -6,11 +9,13 @@ class TraceBuffer:
     and that agent's buffer is reset.
     """
 
-    def __init__(self, on_full_callback, chunk_threshold: int):
+    def __init__(self, on_full_callback, chunk_threshold: int, graph: SummaryState):
         # map agent_id -> list[str]
         self.buffer: dict[str, list[str]] = {}
         self.on_full_callback = on_full_callback
         self.chunk_threshold = chunk_threshold
+        self.graph = graph
+        self.queue = queue.Queue(-1)  # Global queue for all agents: (agent_id, combined_text)
 
     def addchunk(self, agent_id: str, chunk: str):
         # initialize list for agent if necessary
@@ -24,7 +29,10 @@ class TraceBuffer:
             combined = "\n".join(self.buffer[agent_id])
             # callback expected to accept (agent_id, combined_text)
             try:
-                self.on_full_callback(agent_id, combined)
+                if not self.graph.summarizer_busy:
+                    self.on_full_callback(agent_id, combined)
+                else:
+                    self.queue.put((agent_id, combined))
             except Exception as e:
                 # Log the error and continue; buffer will still be reset
                 print(f"Error in on_full_callback for agent {agent_id}: {e}")
