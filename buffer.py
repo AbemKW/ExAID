@@ -17,7 +17,7 @@ class TraceBuffer:
         self.graph = graph
         self.queue = queue.Queue(-1)  # Global queue for all agents: (agent_id, combined_text)
 
-    def addchunk(self, agent_id: str, chunk: str):
+    async def addchunk(self, agent_id: str, chunk: str):
         # initialize list for agent if necessary
         if agent_id not in self.buffer:
             self.buffer[agent_id] = []
@@ -30,7 +30,7 @@ class TraceBuffer:
             # callback expected to accept (agent_id, combined_text)
             try:
                 if not self.graph.summarizer_busy:
-                    self.on_full_callback(agent_id, combined)
+                    await self.on_full_callback(agent_id, combined)
                 else:
                     self.queue.put((agent_id, combined))
             except Exception as e:
