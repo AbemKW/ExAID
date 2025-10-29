@@ -3,10 +3,10 @@ from buffer import TraceBuffer
 from summarizer_agent import summarize
 
 class EXAID:
-    def __init__(self,chunk_threshold: int = 5):
+    def __init__(self):
         self.graph = SummaryState()
         self.agents = {}
-        self.buffer = TraceBuffer(self._on_buffer_full, chunk_threshold, self.graph)
+        self.buffer = TraceBuffer(self._on_buffer_full, self.graph)
 
     def addAgent(self, agent, id: str):
         self.agents[id] = agent

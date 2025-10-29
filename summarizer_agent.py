@@ -16,7 +16,7 @@ summarize_chain = summarize_prompt | llm
 async def summarize(agent_id: str, text: str, graph: State) -> str:
     """Summarizes the given text input."""
     graph.summarizer_busy = True
-    summary = await summarize_chain.invoke({
+    summary = await summarize_chain.ainvoke({
         "input": text, 
         "agent_id": agent_id})
     graph.summarizer_busy = False
