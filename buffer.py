@@ -1,5 +1,4 @@
 from langchain_core.prompts import ChatPromptTemplate
-from summary_state import SummaryState
 from llm import llm
 import queue
 
@@ -11,42 +10,36 @@ class TraceBuffer:
     and that agent's buffer is reset.
     """
 
-    def __init__(self, on_full_callback, graph: SummaryState):
-        # map agent_id -> list[str]
-        self.buffer: dict[str, list[str]] = {}
-        self.on_full_callback = on_full_callback
-        self.graph = graph
-        self.queue = queue.Queue(-1)  # Global queue for all agents: (agent_id, combined_text)
+    def __init__(self):
+        self.buffer= {}
+        self.flag_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+            "You are monitoring the reasoning streams of multiple AI agents. "
+            "For the specified agent, compare the new reasoning snippet to the previous context for that agent. "
+            "If the topic or reasoning goal has changed, or if a complete thought appears to end, reply with exactly 'YES'. Otherwise, reply 'NO'. "
+            "Always consider the agent's identity and context in your analysis."),
+            ("user", "Accumulated reasoning traces in buffer for {agent_id}:\n{previous_trace}\n\nNew trace:\n{new_trace}"),
+            ("user", "Accumulated reasoning traces in buffer for all agents: \n{all_previous_traces}")
+        ])
 
-    async def addchunk(self, agent_id: str, chunk: str):
-        # initialize list for agent if necessary
+    async def addchunk(self, agent_id: str, chunk: str) :
         if agent_id not in self.buffer:
             self.buffer[agent_id] = []
 
-        flag_prompt = ChatPromptTemplate.from_messages([
-            ("system",
-            "You are monitoring an AI agent's reasoning stream. "
-            "Compare the new reasoning snippet to the previous context. "
-            "If the topic or reasoning goal has changed, or if a complete thought "
-            "appears to end, reply with exactly 'YES'. Otherwise, reply 'NO'."),
-            ("user", "Previous context:\n{previous_trace}\n\nNew snippet:\n{new_trace}"),
-        ])
-        flag_chain = flag_prompt | llm
-        flag_response = await flag_chain.ainvoke({"previous_trace": self.buffer[agent_id], "new_trace": chunk})
-        if "YES" in flag_response.upper():
-            # If topic has shifted or thought completed, flush current buffer first
-            if self.buffer[agent_id]:
-                combined = "\n".join(self.buffer[agent_id])
-                try:
-                    if not self.graph.summarizer_busy:
-                        await self.on_full_callback(agent_id, combined)
-                    else:
-                        self.queue.put((agent_id, combined))
-                except Exception as e:
-                    # Log the error and continue; buffer will still be reset
-                    print(f"Error in on_full_callback for agent {agent_id}: {e}")
-                finally:
-                    self.buffer[agent_id] = []
-        elif "NO" in flag_response.upper():
-            # If topic has not shifted, just append the chunk
-            self.buffer[agent_id].append(chunk)
+        self.buffer[agent_id].append(chunk)
+
+        flag_chain = self.flag_prompt | llm
+        flag_response = await flag_chain.ainvoke({
+            "previous_trace": "\n".join(self.buffer[agent_id]),
+            "new_trace": chunk,
+            "all_previous_traces": "\n".join(
+                [f"| {aid} |\n" + "\n".join(chunks) for aid, chunks in self.buffer.items()]
+            )
+        })
+        return "YES" in flag_response.upper()
+    
+    def flush(self) -> list[str]:
+        flushed = self.buffer.copy()
+        self.buffer.clear()
+        return flushed
+            
