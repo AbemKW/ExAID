@@ -29,14 +29,28 @@ class TraceBuffer:
     async def addchunk(self, agent_id: str, chunk: str) :
 
         tagged_chunk = f"| {agent_id} | {chunk}"
+        
+        # If this is the first trace, always trigger
+        if not self.buffer:
+            self.buffer.append(tagged_chunk)
+            return True
+        
+        # Get previous traces (before adding the new one)
+        previous_traces = "\n".join(self.buffer)
+        
+        # Add the new chunk to buffer
         self.buffer.append(tagged_chunk)
 
         flag_chain = self.flag_prompt | llm
         flag_response = await flag_chain.ainvoke({
-            "previous_trace": "\n".join(self.buffer),
+            "previous_trace": previous_traces,
             "new_trace": tagged_chunk
         })
-        return "YES" in flag_response.upper()
+        # Extract text content from AIMessage object
+        response_text = flag_response.content.strip().upper()
+
+        return "YES" in response_text
+    
     
     def flush(self) -> list[str]:
         flushed = self.buffer.copy()
