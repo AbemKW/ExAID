@@ -1,105 +1,146 @@
+
 # EXAID
 
-EXAID is a small experimental Python project for capturing short "live" traces from multiple agents, buffering those traces, and producing concise summaries that are stored in an in-memory summary graph. It is intended as a minimal prototype for workflows such as live note-taking, agent introspection, or multi-agent reasoning where intermediate traces are captured and condensed over time.
-
-This README documents the project's purpose and provides a short description of each file so contributors and users can quickly understand the code layout.
+EXAID is an experimental Python project for capturing short, live traces from multiple agents, buffering those traces, and producing concise summaries using an LLM. It is designed as a minimal prototype for medical multi-agent reasoning workflows, where specialized agents (e.g., InfectiousDiseaseAgent, HematologyAgent, OncologyAgent) collaborate on clinical cases, and their reasoning traces are captured and condensed into structured summaries optimized for physician understanding.
 
 ## Quick Start
 
-1. Create and activate a virtual environment (recommended):
+1. **Create and activate a virtual environment (recommended):**
 
-    ```bash
-    python -m venv .venv
-    # On Windows:
-    .\.venv\Scripts\Activate.ps1
-    # On Unix/Mac:
-    source .venv/bin/activate
-    ```
+   ```bash
+   python -m venv .venv
+   # On Windows:
+   .\.venv\Scripts\Activate.ps1
+   # On Unix/Mac:
+   source .venv/bin/activate
+   ```
 
-2. Install dependencies:
+2. **Install dependencies:**
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. Configure the LLM client in `llm.py` with your API credentials and endpoint.
+3. **Configure the LLM client** in `llm.py` with your API credentials and endpoint.
 
-4. Run tests to verify the setup:
+4. **Run the demo:**
 
-    ```bash
-    python -m unittest test.py
-    ```
+   ```bash
+   python demo.py
+   ```
 
-5. Use the EXAID class in your code:
+5. **Use the EXAID class in your code:**
 
-    ```python
-    from exaid import EXAID
+   ```python
+   import asyncio
+   from exaid import EXAID
 
-    # Create an EXAID instance with a buffer threshold of 5 chunks
-    exaid = EXAID(chunk_threshold=5)
+   async def main():
+       exaid = EXAID()
+       # Add traces for any agent (agent_id, text)
+       summary = await exaid.received_trace("agent_1", "Some trace text")
+       if summary:
+           print("Updated summary:", summary)
+           # Get summary as JSON
+           json_summary = exaid.get_summary_json(summary)
+           print(json_summary)
+   
+   asyncio.run(main())
+   ```
 
-    # Add an agent (you can add multiple agents)
-    exaid.addAgent(some_agent_object, "agent_1")
-
-    # Add traces for the agent
-    await exaid.addTrace("agent_1", "Some trace text")
-
-    # Get the latest summary
-    summary = await exaid.getsummary("agent_1")
-    ```
 
 ## High-level Design
 
 The system is organized around a few small modules:
 
 - `exaid.py` — EXAID orchestrator class
-   - Purpose: A lightweight orchestrator object that holds a `SummaryState` (an in-memory graph of traces and summaries), manages registered agents, and collects traces via a `TraceBuffer`. When the buffer reaches a threshold the EXAID instance requests a summary and writes the resulting summary back into the `SummaryState`.
-   - Key symbols: `EXAID.addAgent`, `EXAID.addTrace`, `EXAID._on_buffer_full`.
+  - Purpose: Collects traces from agents, buffers them, and produces summaries using an LLM. Maintains a list of all summaries.
+  - Key methods:
+    - `received_trace(agent_id, text)` — Call this to add a trace for an agent. If a summary is triggered, it returns the new `AgentSummary` object.
+    - `latest_summary()` — Returns the most recent summary or "No summaries yet."
+    - `get_all_summaries()` — Returns all summaries as a list of `AgentSummary` objects.
+    - `get_summary_json(summary=None)` — Returns a summary as a JSON string (defaults to latest summary).
 
-- `summarizer_agent.py` — summarization wrapper
-   - Purpose: Contains the `summarize` function which wraps calls to the project's LLM integration (via `llm.py`) and produces short condensed summaries from input text.
-   - Note: The current `summarize` implementation is synchronous in the repository copy and directly calls `llm.invoke` with a simple prompt.
+- `agents/summarizer.py` — Summarization wrapper
+  - Purpose: Contains the `summarize` function, which wraps calls to the LLM (via `llm.py`) and produces structured `AgentSummary` objects from input text.
+  - Features:
+    - Uses structured output with Pydantic models for consistent summaries
+    - Enforces character limits (action: 100, reasoning: 200, findings: 150, next_steps: 100)
+    - Optimized for medical/clinical reasoning with physician-focused prompts
+    - Returns `AgentSummary` objects with fields: `agents`, `action`, `reasoning`, `findings`, `next_steps`
 
-- `buffer.py` — simple TraceBuffer
-   - Purpose: Implements `TraceBuffer`, a tiny buffer that accumulates short traces (tuples of agent id and text). When the buffer reaches `chunk_threshold` it calls a callback (provided by `EXAID`) with the combined chunks and resets itself.
-   - Features: Includes comprehensive error handling for input validation and callback exceptions.
+- `agents/base_agent.py` — Base agent interface
+  - Purpose: Abstract base class (`BaseAgent`) defining the interface for agents that can be integrated with EXAID.
+  - Key method: `act(input: str) -> str` — Abstract method that agents must implement.
 
-- `llm.py` — language-model client configuration
-   - Purpose: Holds an LLM client instance used by `summarizer_agent.py`. The current code initializes a `langchain_openai.OpenAI` client pointing at a local base_url and a placeholder API key. Replace or configure this with your model provider and credentials when running for real.
+- `buffer.py` — TraceBuffer
+  - Purpose: Implements `TraceBuffer`, a buffer that accumulates traces per agent. Uses an LLM-based prompt to decide when to trigger summarization (event-driven, not just a static threshold).
+  - Features:
+    - LLM-powered trigger logic that evaluates trace content
+    - Decides summarization based on completed thoughts, topic changes, or accumulated context
+    - Tags traces with agent IDs for multi-agent tracking
 
-- `summary_state.py` — in-memory summary graph/state
-   - Purpose: A tiny in-memory structure which keeps per-agent traces, summaries, and feedback. It provides helper methods to add agents and append new trace/summary/feedback nodes. This file is intentionally simple and meant to be replaced by a more robust storage layer in production.
+- `llm.py` — LLM client configuration
+  - Purpose: Holds the LLM client instance used for summarization and trigger decisions. Update this file with your model provider and credentials.
+  - Currently configured for OpenAI-compatible API (using LangChain's `ChatOpenAI`).
 
-- `tools/normalizer_tool.py` — placeholder normalizer
-   - Purpose: Intended to contain text-normalization helpers (e.g., stripping noisy tokens, normalizing whitespace, or simple cleaning). The file is currently empty and acts as a placeholder for future tooling.
-
-- `test.py` — unit tests
-   - Purpose: Contains unit tests for the core components, including `SummaryState`, `TraceBuffer`, and integration tests for `EXAID`.
+- `demo.py` — Example usage
+  - Purpose: Demonstrates how to use the EXAID system with multiple agents and traces in a medical scenario.
+  - Shows a complete workflow: patient case processing through multiple specialized agents (InfectiousDiseaseAgent, HematologyAgent, OncologyAgent, etc.) with formatted summary output.
 
 - `requirements.txt` — Python dependencies
-   - Purpose: Lists the project's external Python dependencies. Currently contains minimal langchain packages; you may need to pin additional dependencies or update versions depending on your environment.
+  - Purpose: Lists the project's external Python dependencies (LangChain, Pydantic, etc.).
+
+## Features
+
+- **LLM-powered event-driven summarization:** The buffer uses an LLM to intelligently decide when to trigger summarization based on trace content, not just a static threshold. Summarization triggers when thoughts complete, topics change, or sufficient context accumulates.
+- **Multi-agent support:** Traces are tagged by agent ID and summarized in context, allowing multiple specialized agents to contribute to a single reasoning workflow.
+- **Structured summaries:** Summaries are generated as structured `AgentSummary` objects with fields optimized for medical reasoning:
+  - `agents`: List of agent IDs involved
+  - `action`: Brief action statement (max 100 chars)
+  - `reasoning`: Concise reasoning explanation (max 200 chars)
+  - `findings`: Key clinical findings or recommendations (max 150 chars, optional)
+  - `next_steps`: Suggested next actions (max 100 chars, optional)
+- **Character limit enforcement:** Automatic truncation ensures summaries remain concise and physician-friendly.
+- **Medical/clinical focus:** Prompts and summaries are optimized for physician understanding of multi-agent clinical reasoning.
+- **Simple async API:** Add traces and get summaries with a single async method call.
+- **JSON export:** Export summaries as JSON for integration with other systems.
 
 ## Development Notes and Suggestions
 
-- The project is a prototype: some modules contain minimal or placeholder code (for example, `tools/normalizer_tool.py` is empty). Expect to iterate on the summarization prompt and the LLM client configuration.
+- The project is a prototype. Expect to iterate on the summarization prompt and LLM configuration.
+- Update `llm.py` to point at your LLM provider and set credentials securely. The current configuration uses an OpenAI-compatible API endpoint.
+- The system uses async/await patterns throughout, so ensure you're running within an async context when calling methods.
+- See `doc/feedback.md` for additional design suggestions:
+  - Event subscription/pub-sub system for summary events (currently not implemented)
+  - Further clarification on trace semantics and structure
 
-- If you plan to run this end-to-end, update `llm.py` to point at a reachable LLM provider and set credentials via environment variables or a secrets manager. Avoid committing real API keys into the repository.
+## Project Structure
 
-- Consider adding unit tests for `buffer.py` and `summary_state.py` to 
-lock in expected behaviour for buffering and state updates.
+```
+ExAID/
+├── exaid.py                 # Main orchestrator class
+├── buffer.py                # TraceBuffer with LLM-based trigger logic
+├── llm.py                   # LLM client configuration
+├── demo.py                  # Medical case demonstration
+├── requirements.txt         # Python dependencies
+├── agents/
+│   ├── base_agent.py       # Abstract base class for agents
+│   └── summarizer.py       # Summarization logic with structured output
+└── doc/
+    └── feedback.md         # Design feedback and suggestions
+```
 
-- The `TraceBuffer` class includes comprehensive error handling for input validation and callback exception management.
+## Files Summary
 
-## Files Summary (one-line each)
-
-- `exaid.py`: Orchestrator class that collects traces, buffers them, and records summaries into `SummaryState`.
-- `summarizer_agent.py`: Small wrapper that constructs summarization prompts and calls the LLM client.
-- `buffer.py`: `TraceBuffer` implementation with error handling; triggers a callback when the threshold is reached.
-- `llm.py`: LLM client configuration for local or remote model endpoints.
-- `summary_state.py`: Lightweight in-memory graph to store per-agent traces, summaries, and feedback.
-- `test.py`: Unit tests for core components including `SummaryState`, `TraceBuffer`, and `EXAID`.
-- `tools/normalizer_tool.py`: Placeholder for normalization utilities (currently empty).
-- `requirements.txt`: Pin or list runtime dependencies for the project.
+- `exaid.py`: Orchestrator class that collects traces, buffers them, and records summaries. Provides methods for trace processing, summary retrieval, and JSON export.
+- `agents/summarizer.py`: Summarization logic with structured output. Defines `AgentSummary` model and `summarize` function.
+- `agents/base_agent.py`: Abstract base class (`BaseAgent`) defining the interface for agents that can integrate with EXAID.
+- `buffer.py`: `TraceBuffer` implementation with LLM-based trigger logic for event-driven summarization.
+- `llm.py`: LLM client configuration using LangChain's `ChatOpenAI` (configured for OpenAI-compatible endpoints).
+- `demo.py`: Example usage demonstrating a complete medical case workflow with multiple specialized agents.
+- `requirements.txt`: Project dependencies (LangChain, Pydantic, etc.).
+- `doc/feedback.md`: Design feedback and suggestions for future improvements.
 
 ## License
 
