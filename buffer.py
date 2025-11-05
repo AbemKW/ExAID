@@ -25,16 +25,20 @@ class TraceBuffer:
             "Be decisive - prefer YES when in doubt, as summaries help track agent progress."),
             ("user", "Previous traces in buffer:\n{previous_trace}\n\nNew trace to evaluate:\n{new_trace}\n\nShould this trigger summarization? Reply with only 'YES' or 'NO'."),
         ])
+        self.trace_count: dict[str, int] = {}
 
     async def addchunk(self, agent_id: str, chunk: str) :
 
         tagged_chunk = f"| {agent_id} | {chunk}"
+
+        if agent_id not in self.trace_count:
+            self.trace_count[agent_id] = 0
+        self.trace_count[agent_id] += 1
         
         # If this is the first trace, always trigger
         if not self.buffer:
             self.buffer.append(tagged_chunk)
             return True
-        
         # Get previous traces (before adding the new one)
         previous_traces = "\n".join(self.buffer)
         
@@ -56,4 +60,6 @@ class TraceBuffer:
         flushed = self.buffer.copy()
         self.buffer.clear()
         return flushed
-            
+        
+    def get_trace_count(self, agent_id: str) -> int:
+        return self.trace_count.get(agent_id, 0)

@@ -1,8 +1,8 @@
 from typing import Optional, Union
 from buffer import TraceBuffer
-from agents.summarizer import summarize, AgentSummary
+from agents.summarizer import summarize
+from schema.agent_summary import AgentSummary
 import json
-
 
 class EXAID:
     def __init__(self):
@@ -18,7 +18,14 @@ class EXAID:
     def get_all_summaries(self) -> list[AgentSummary]:
         """Returns all summaries as AgentSummary objects."""
         return self.summaries
-    
+
+    def get_summaries_by_agent(self, agent_id: str) -> list[AgentSummary]:
+        """Get all summaries involving a specific agent."""
+        return [s for s in self.summaries if agent_id in s.agents]
+
+    def get_agent_trace_count(self, agent_id: str) -> int:
+        return self.trace_buffer.get_trace_count(agent_id)
+
     def _format_summary_for_history(self, summary: AgentSummary) -> str:
         """Converts an AgentSummary to a string representation for use in history."""
         agents_str = ", ".join(summary.agents)
