@@ -2,7 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from llm import llm
 import queue
 
-class TraceBuffer:
+class BufferAgent:
     """A tiny buffer that stores chunks per-agent.
 
     When a given agent's accumulated chunks reach `chunk_threshold`, the
@@ -12,6 +12,7 @@ class TraceBuffer:
 
     def __init__(self):
         self.buffer: list[str] = []
+        self.llm = llm
         self.flag_prompt = ChatPromptTemplate.from_messages([
             ("system",
             "You are monitoring the reasoning streams of multiple AI agents. "

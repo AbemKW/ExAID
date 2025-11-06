@@ -1,12 +1,13 @@
 from typing import Optional, Union
-from buffer import TraceBuffer
-from agents.summarizer import summarize
+from agents.buffer_agent import BufferAgent
+from agents.summarizer_agent import SummarizerAgent
 from schema.agent_summary import AgentSummary
 import json
 
 class EXAID:
     def __init__(self):
-        self.trace_buffer = TraceBuffer()
+        self.buffer_agent = BufferAgent()
+        self.summarizer_agent = SummarizerAgent()
         self.summaries: list[AgentSummary] = []
     
     def latest_summary(self) -> Union[AgentSummary, str]:
@@ -24,7 +25,7 @@ class EXAID:
         return [s for s in self.summaries if agent_id in s.agents]
 
     def get_agent_trace_count(self, agent_id: str) -> int:
-        return self.trace_buffer.get_trace_count(agent_id)
+        return self.buffer_agent.get_trace_count(agent_id)
 
     def _format_summary_for_history(self, summary: AgentSummary) -> str:
         """Converts an AgentSummary to a string representation for use in history."""
@@ -42,9 +43,9 @@ class EXAID:
 
     async def received_trace(self, id: str, text: str) -> Optional[AgentSummary]:
         """Process a trace from an agent. Returns an AgentSummary if summarization was triggered, None otherwise."""
-        trigger = await self.trace_buffer.addchunk(id, text)
+        trigger = await self.buffer_agent.addchunk(id, text)
         if trigger:
-            agent_buffer = self.trace_buffer.flush()
+            agent_buffer = self.buffer_agent.flush()
             buffer_str = "\n".join(agent_buffer)
             
             # Get previous summaries (excluding the latest one for comparison)
@@ -52,7 +53,7 @@ class EXAID:
             summary_history_strs = self._format_summaries_history(all_summaries[:-1]) if len(all_summaries) > 1 else []
             latest_summary_str = self._format_summary_for_history(all_summaries[-1]) if all_summaries else "No summaries yet."
             
-            summary = await summarize(
+            summary = await self.summarizer_agent.summarize(
                 summary_history_strs,
                 latest_summary_str,
                 buffer_str
