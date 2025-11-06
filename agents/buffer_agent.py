@@ -1,6 +1,13 @@
+from datetime import datetime, UTC
+from typing import List
 from langchain_core.prompts import ChatPromptTemplate
 from llm import llm
 import queue
+from pydantic import BaseModel
+
+class TraceData(BaseModel):
+    trace_text: List[str]
+    count: int
 
 class BufferAgent:
     """A tiny buffer that stores chunks per-agent.
@@ -26,15 +33,18 @@ class BufferAgent:
             "Be decisive - prefer YES when in doubt, as summaries help track agent progress."),
             ("user", "Previous traces in buffer:\n{previous_trace}\n\nNew trace to evaluate:\n{new_trace}\n\nShould this trigger summarization? Reply with only 'YES' or 'NO'."),
         ])
-        self.trace_count: dict[str, int] = {}
+        self.traces: dict[str, TraceData] = {}
 
     async def addchunk(self, agent_id: str, chunk: str) :
 
         tagged_chunk = f"| {agent_id} | {chunk}"
 
-        if agent_id not in self.trace_count:
-            self.trace_count[agent_id] = 0
-        self.trace_count[agent_id] += 1
+        # Add the new chunk to the traces
+        if agent_id not in self.traces:
+            self.traces[agent_id] = TraceData(trace_text=[], count=0)
+        self.traces[agent_id].count += 1
+        trace_text = f"| Timestamp: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} | Trace Length: {len(chunk)} | {chunk}"
+        self.traces[agent_id].trace_text.append(trace_text)
         
         # If this is the first trace, always trigger
         if not self.buffer:
@@ -56,7 +66,6 @@ class BufferAgent:
 
         return "YES" in response_text
     
-    
     def peek(self) -> list[str]:
         """Get a copy of the current buffer without flushing it."""
         return self.buffer.copy()
@@ -67,4 +76,7 @@ class BufferAgent:
         return flushed
         
     def get_trace_count(self, agent_id: str) -> int:
-        return self.trace_count.get(agent_id, 0)
+        return self.traces.get(agent_id, TraceData(trace_text=[], count=0)).count
+    
+    def get_traces(self, agent_id: str) -> List[str]:
+        return self.traces.get(agent_id, TraceData(trace_text=[], count=0)).trace_text
