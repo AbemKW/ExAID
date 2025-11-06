@@ -57,6 +57,10 @@ class BufferAgent:
         return "YES" in response_text
     
     
+    def peek(self) -> list[str]:
+        """Get a copy of the current buffer without flushing it."""
+        return self.buffer.copy()
+    
     def flush(self) -> list[str]:
         flushed = self.buffer.copy()
         self.buffer.clear()
