@@ -14,8 +14,8 @@ class TokenGate:
         min_tokens: int = 35,
         max_tokens: int = 90,
         boundary_cues: str = ".?!\n",
-        silence_timer: float = 1.75,
-        max_wait_timeout: float = 4.5
+        silence_timer: float = 15,
+        max_wait_timeout: float = 40
     ):
         """Initialize TokenGate with configurable flush triggers.
         

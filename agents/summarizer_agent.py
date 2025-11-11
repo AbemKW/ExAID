@@ -1,12 +1,12 @@
 from langchain_core.prompts import ChatPromptTemplate
 from schema.agent_summary import AgentSummary
 from typing import List
-from llm import llm
+from llm import llm, summarizer
 
 
 class SummarizerAgent:
     def __init__(self):
-        self.llm = llm.with_structured_output(schema=AgentSummary)
+        self.llm = summarizer.with_structured_output(schema=AgentSummary)
         self.summarize_prompt = ChatPromptTemplate.from_messages([    
             ("system", "You are an expert summarizer for a medical multi-agent reasoning system. "
             "Extract essential information about agent actions and clinical reasoning from the new buffer. "

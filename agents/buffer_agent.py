@@ -1,7 +1,7 @@
 from datetime import datetime, UTC
 from typing import List, Optional
 from langchain_core.prompts import ChatPromptTemplate
-from llm import llm
+from llm import llm, summarizer
 import queue
 import re
 import json
@@ -21,7 +21,7 @@ class BufferAgent:
 
     def __init__(self):
         self.buffer: list[str] = []
-        self.llm = llm
+        self.llm = summarizer
         self.flag_prompt = ChatPromptTemplate.from_messages([
             ("system",
             "You are monitoring the reasoning streams of multiple AI agents. "
@@ -72,7 +72,7 @@ class BufferAgent:
         # Add the new chunk to buffer
         self.buffer.append(tagged_chunk)
 
-        flag_chain = self.flag_prompt | llm
+        flag_chain = self.flag_prompt | self.llm
         flag_response = await flag_chain.ainvoke({
             "previous_trace": previous_traces,
             "new_trace": tagged_chunk
