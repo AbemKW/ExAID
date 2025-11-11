@@ -15,28 +15,32 @@ from cdss_demo.agents.orchestrator_agent import OrchestratorAgent
 from cdss_demo.agents.cardiology_agent import CardiologyAgent
 from cdss_demo.agents.laboratory_agent import LaboratoryAgent
 from cdss_demo.schema.clinical_case import ClinicalCase
+from cdss_demo.graph.cdss_graph import build_cdss_graph
+from cdss_demo.schema.graph_state import CDSSGraphState
 
 
 class CDSS:
     """Clinical Decision Support System orchestrator"""
     
     def __init__(self):
-        """Initialize CDSS with EXAID and specialized agents"""
+        """Initialize CDSS with EXAID and LangGraph workflow"""
         self.exaid = EXAID()
         self.orchestrator = OrchestratorAgent()
         self.cardiology = CardiologyAgent()
         self.laboratory = LaboratoryAgent()
+        self.graph = build_cdss_graph()
     
     async def process_case(
         self, 
         case: Union[ClinicalCase, str],
         use_streaming: bool = True
     ) -> dict:
-        """Process a clinical case through the multi-agent system
+        """Process a clinical case through the multi-agent system using LangGraph
         
         Args:
             case: ClinicalCase object or free-text case description
             use_streaming: Whether to use streaming token processing (default: True)
+                Note: Currently LangGraph doesn't support streaming, so this is ignored
             
         Returns:
             Dictionary containing agent findings and final recommendation
@@ -47,110 +51,27 @@ class CDSS:
         else:
             case_text = str(case)
         
-        # Step 1: Orchestrator analyzes case and determines workflow
-        orchestrator_input = (
-            f"Clinical Case:\n{case_text}\n\n"
-            "Analyze this case and determine which specialist agents should be consulted. "
-            "Identify key clinical questions that need to be answered."
-        )
+        # Initialize graph state
+        initial_state: CDSSGraphState = {
+            "case_text": case_text,
+            "orchestrator_analysis": None,
+            "agents_to_call": None,
+            "laboratory_findings": None,
+            "cardiology_findings": None,
+            "final_synthesis": None,
+            "exaid": self.exaid
+        }
         
-        if use_streaming:
-            token_stream = self.orchestrator.act_stream(orchestrator_input)
-            await self.exaid.received_streamed_tokens(
-                self.orchestrator.agent_id,
-                token_stream
-            )
-        else:
-            orchestrator_trace = await self.orchestrator.act(orchestrator_input)
-            await self.exaid.received_trace(
-                self.orchestrator.agent_id,
-                orchestrator_trace
-            )
+        # Run the graph workflow
+        # Note: LangGraph doesn't currently support streaming in the same way,
+        # so we use the standard invoke method
+        final_state = await self.graph.ainvoke(initial_state)
         
-        # Step 2: Laboratory agent analyzes lab results
-        lab_input = (
-            f"Clinical Case:\n{case_text}\n\n"
-            "Analyze the laboratory results and provide interpretation. "
-            "Identify any abnormal values, critical findings, or patterns that suggest specific diagnoses. "
-            "Recommend additional tests if needed."
-        )
-        
-        if use_streaming:
-            token_stream = self.laboratory.act_stream(lab_input)
-            await self.exaid.received_streamed_tokens(
-                self.laboratory.agent_id,
-                token_stream
-            )
-        else:
-            lab_trace = await self.laboratory.act(lab_input)
-            await self.exaid.received_trace(
-                self.laboratory.agent_id,
-                lab_trace
-            )
-        
-        # Step 3: Cardiology agent assesses cardiac aspects
-        cardio_input = (
-            f"Clinical Case:\n{case_text}\n\n"
-            "Assess the cardiac aspects of this case. Consider:\n"
-            "- Cardiovascular risk factors\n"
-            "- Cardiac symptoms and signs\n"
-            "- Cardiac biomarkers and tests\n"
-            "- ECG or imaging findings if available\n"
-            "- Cardiac medication considerations\n"
-            "Provide cardiac assessment and recommendations."
-        )
-        
-        if use_streaming:
-            token_stream = self.cardiology.act_stream(cardio_input)
-            await self.exaid.received_streamed_tokens(
-                self.cardiology.agent_id,
-                token_stream
-            )
-        else:
-            cardio_trace = await self.cardiology.act(cardio_input)
-            await self.exaid.received_trace(
-                self.cardiology.agent_id,
-                cardio_trace
-            )
-        
-        # Step 4: Orchestrator synthesizes findings
-        # Get all summaries for context
+        # Get all summaries
         all_summaries = self.exaid.get_all_summaries()
-        summary_context = "\n\n".join([
-            f"Agent: {', '.join(s.agents)}\n"
-            f"Action: {s.action}\n"
-            f"Reasoning: {s.reasoning}\n"
-            f"Findings: {s.findings or 'N/A'}\n"
-            f"Next Steps: {s.next_steps or 'N/A'}"
-            for s in all_summaries
-        ])
         
-        synthesis_input = (
-            f"Original Clinical Case:\n{case_text}\n\n"
-            f"Agent Findings and Summaries:\n{summary_context}\n\n"
-            "Synthesize all findings from the specialist agents into a comprehensive "
-            "clinical assessment and recommendation. Provide:\n"
-            "- Overall clinical assessment\n"
-            "- Key findings from each specialist\n"
-            "- Integrated diagnosis or differential diagnosis\n"
-            "- Prioritized recommendations\n"
-            "- Follow-up plan"
-        )
-        
-        if use_streaming:
-            token_stream = self.orchestrator.act_stream(synthesis_input)
-            final_summary = await self.exaid.received_streamed_tokens(
-                self.orchestrator.agent_id,
-                token_stream
-            )
-        else:
-            final_trace = await self.orchestrator.act(synthesis_input)
-            final_summary = await self.exaid.received_trace(
-                self.orchestrator.agent_id,
-                final_trace
-            )
-        
-        all_summaries = self.exaid.get_all_summaries()
+        # Get the final summary (last one from synthesis)
+        final_summary = all_summaries[-1] if all_summaries else None
         
         # Compile results
         result = {
@@ -176,6 +97,10 @@ class CDSS:
                 "orchestrator": self.exaid.get_agent_trace_count(self.orchestrator.agent_id),
                 "cardiology": self.exaid.get_agent_trace_count(self.cardiology.agent_id),
                 "laboratory": self.exaid.get_agent_trace_count(self.laboratory.agent_id)
+            },
+            "agents_called": {
+                "laboratory": (final_state.get("agents_to_call") or {}).get("laboratory", False),
+                "cardiology": (final_state.get("agents_to_call") or {}).get("cardiology", False)
             }
         }
         

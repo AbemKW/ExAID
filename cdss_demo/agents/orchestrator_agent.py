@@ -1,7 +1,15 @@
 from typing import AsyncIterator
 from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
 from agents.base_agent import BaseAgent
 from llm import llm
+
+
+class AgentDecision(BaseModel):
+    """Structured output for orchestrator's decision on which agents to call"""
+    call_laboratory: bool = Field(description="Whether to consult the Laboratory agent")
+    call_cardiology: bool = Field(description="Whether to consult the Cardiology agent")
+    reasoning: str = Field(description="Brief reasoning for the decision")
 
 
 class OrchestratorAgent(BaseAgent):
@@ -40,6 +48,41 @@ class OrchestratorAgent(BaseAgent):
              "Always show your thought process explicitly."),
             ("user", "{input}")
         ])
+        self.decision_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "You are an expert clinical decision support orchestrator. Your task is to analyze a clinical case "
+             "and determine which specialist agents should be consulted.\n\n"
+             "Available agents:\n"
+             "- Laboratory Agent: Consult when the case involves laboratory results, abnormal lab values, "
+             "or when lab interpretation is needed for diagnosis.\n"
+             "- Cardiology Agent: Consult when the case involves cardiac symptoms, cardiac risk factors, "
+             "cardiac biomarkers, ECG findings, or cardiovascular concerns.\n\n"
+             "Analyze the case and decide which agents are needed. Only call agents that are relevant to the case. "
+             "If a case has no lab results or cardiac concerns, you may choose not to call those agents.\n\n"
+             "Provide your decision in the structured format with reasoning."),
+            ("user", "Clinical Case:\n{case_text}\n\n"
+             "Analyze this case and determine which specialist agents should be consulted. "
+             "Consider:\n"
+             "- Are there laboratory results that need interpretation?\n"
+             "- Are there cardiac symptoms, risk factors, or cardiac biomarkers?\n"
+             "- What clinical questions need to be answered?\n\n"
+             "Respond with your decision on which agents to call.")
+        ])
+    
+    async def analyze_and_decide(self, case_text: str) -> AgentDecision:
+        """Analyze case and decide which agents to call using structured output
+        
+        Args:
+            case_text: The clinical case text to analyze
+            
+        Returns:
+            AgentDecision with call_laboratory, call_cardiology, and reasoning
+        """
+        # Use structured output to get the decision
+        structured_llm = self.llm.with_structured_output(AgentDecision)
+        chain = self.decision_prompt | structured_llm
+        decision = await chain.ainvoke({"case_text": case_text})
+        return decision
     
     async def act(self, input: str) -> str:
         """Process clinical case and coordinate agent workflow"""
