@@ -1,5 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate
-from llm import summarizer
+from llm import llm
 from pydantic import BaseModel
 
 class TraceData(BaseModel):
@@ -9,7 +9,7 @@ class TraceData(BaseModel):
 class BufferAgent:
     def __init__(self):
         self.buffer: list[str] = []
-        self.llm = summarizer
+        self.llm = llm
         self.flag_prompt = ChatPromptTemplate.from_messages([
             ("system",
             "You are monitoring the reasoning streams of multiple AI agents. "
@@ -31,15 +31,19 @@ class BufferAgent:
             self.traces[agent_id] = TraceData(trace_text=[], count=0)
         self.traces[agent_id].count += 1
         
-        if not self.buffer:
-            self.buffer.append(tagged_chunk)
-            return True
+        # Check if buffer was empty before adding this chunk
+        was_empty = not self.buffer
         
-        previous_traces = "\n".join(self.buffer)
+        # Always add the chunk to buffer
         self.buffer.append(tagged_chunk)
+        
+        # Always call the LLM to decide if summarization should be triggered
+        # Use empty string for previous_trace if buffer was empty before adding this chunk
+        previous_traces = "\n".join(self.buffer[:-1]) if not was_empty else ""
+        
         flag_chain = self.flag_prompt | self.llm
         flag_response = await flag_chain.ainvoke({
-            "previous_trace": previous_traces,
+            "previous_trace": previous_traces if previous_traces else "(No previous traces - this is the first trace)",
             "new_trace": tagged_chunk
         })
         return "YES" in flag_response.content.strip().upper()
