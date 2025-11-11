@@ -1,8 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from schema.agent_summary import AgentSummary
 from typing import List
-from llm import llm, summarizer
-
+from llm import summarizer
 
 class SummarizerAgent:
     def __init__(self):
@@ -19,24 +18,8 @@ class SummarizerAgent:
             ("user", "Summary history:\n[ {summary_history} ]\n\nLatest summary:\n{latest_summary}\n\nNew reasoning buffer:\n{new_buffer}\n\nExtract structured summary of new agent actions and reasoning."),
         ])
 
-    async def summarize(
-        self, 
-        summary_history: List[str], 
-        latest_summary: str, 
-        new_buffer: str
-    ) -> AgentSummary:
-        """Updates the summary given the summary history (as a list), latest summary, and new reasoning buffer.
-        
-        Args:
-            summary_history: List of previous summary strings
-            latest_summary: Latest summary string
-            new_buffer: New reasoning buffer content
-            
-        Returns:
-            A structured AgentSummary object
-        """
+    async def summarize(self, summary_history: List[str], latest_summary: str, new_buffer: str) -> AgentSummary:
         summarize_chain = self.summarize_prompt | self.llm
-        
         summary = await summarize_chain.ainvoke({
             "summary_history": ",\n".join(summary_history),
             "latest_summary": latest_summary,

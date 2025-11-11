@@ -56,20 +56,16 @@ class CDSS:
         
         if use_streaming:
             token_stream = self.orchestrator.act_stream(orchestrator_input)
-            summary = await self.exaid.received_streamed_tokens(
+            await self.exaid.received_streamed_tokens(
                 self.orchestrator.agent_id,
                 token_stream
             )
-            if summary:
-                print(f"[DEBUG] Orchestrator summary generated: {summary.action[:50]}...")
         else:
             orchestrator_trace = await self.orchestrator.act(orchestrator_input)
-            summary = await self.exaid.received_trace(
+            await self.exaid.received_trace(
                 self.orchestrator.agent_id,
                 orchestrator_trace
             )
-            if summary:
-                print(f"[DEBUG] Orchestrator summary generated: {summary.action[:50]}...")
         
         # Step 2: Laboratory agent analyzes lab results
         lab_input = (
@@ -81,20 +77,16 @@ class CDSS:
         
         if use_streaming:
             token_stream = self.laboratory.act_stream(lab_input)
-            summary = await self.exaid.received_streamed_tokens(
+            await self.exaid.received_streamed_tokens(
                 self.laboratory.agent_id,
                 token_stream
             )
-            if summary:
-                print(f"[DEBUG] Laboratory summary generated: {summary.action[:50]}...")
         else:
             lab_trace = await self.laboratory.act(lab_input)
-            summary = await self.exaid.received_trace(
+            await self.exaid.received_trace(
                 self.laboratory.agent_id,
                 lab_trace
             )
-            if summary:
-                print(f"[DEBUG] Laboratory summary generated: {summary.action[:50]}...")
         
         # Step 3: Cardiology agent assesses cardiac aspects
         cardio_input = (
@@ -110,20 +102,16 @@ class CDSS:
         
         if use_streaming:
             token_stream = self.cardiology.act_stream(cardio_input)
-            summary = await self.exaid.received_streamed_tokens(
+            await self.exaid.received_streamed_tokens(
                 self.cardiology.agent_id,
                 token_stream
             )
-            if summary:
-                print(f"[DEBUG] Cardiology summary generated: {summary.action[:50]}...")
         else:
             cardio_trace = await self.cardiology.act(cardio_input)
-            summary = await self.exaid.received_trace(
+            await self.exaid.received_trace(
                 self.cardiology.agent_id,
                 cardio_trace
             )
-            if summary:
-                print(f"[DEBUG] Cardiology summary generated: {summary.action[:50]}...")
         
         # Step 4: Orchestrator synthesizes findings
         # Get all summaries for context
@@ -155,20 +143,14 @@ class CDSS:
                 self.orchestrator.agent_id,
                 token_stream
             )
-            if final_summary:
-                print(f"[DEBUG] Final synthesis summary generated: {final_summary.action[:50]}...")
         else:
             final_trace = await self.orchestrator.act(synthesis_input)
             final_summary = await self.exaid.received_trace(
                 self.orchestrator.agent_id,
                 final_trace
             )
-            if final_summary:
-                print(f"[DEBUG] Final synthesis summary generated: {final_summary.action[:50]}...")
         
-        # Get all summaries
         all_summaries = self.exaid.get_all_summaries()
-        print(f"[DEBUG] Total summaries collected: {len(all_summaries)}")
         
         # Compile results
         result = {
